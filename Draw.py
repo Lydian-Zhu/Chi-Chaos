@@ -1,6 +1,5 @@
 """
-chi-field: Publication-Quality Figures for Paper
-High-resolution, smooth trajectories, professional styling
+chi-field: Publication-Quality Figures with Professional Color Schemes
 """
 
 import numpy as np
@@ -10,19 +9,42 @@ from scipy.integrate import odeint
 import warnings
 warnings.filterwarnings('ignore')
 
-# Set professional style
+# ============================================================================
+# Professional Color Schemes
+# ============================================================================
+
+# Color maps
+CMAP_PHI = 'plasma'      # Plasma for chaos intensity (purple-gold, high contrast)
+CMAP_FTLE = 'viridis'    # Viridis for FTLE (green-blue, perceptually uniform)
+CMAP_PHI_LOG = 'inferno' # Inferno for log-scale (dark red-bright yellow)
+
+# Trajectory colors
+COLOR_TRAJ = '#00CED1'   # Turquoise
+COLOR_TRAJ_DUFFING = '#00CED1'
+
+# Fixed point colors
+COLOR_SADDLE = '#DC143C'  # Crimson red
+COLOR_CENTER = '#32CD32'  # Lime green
+COLOR_START = '#FFD700'   # Gold
+
+# Arrow colors
+COLOR_ARROW = '#FFFFFF'   # White
+COLOR_ARROW_EDGE = '#333333'
+
+# Background
 plt.rcParams['font.size'] = 12
 plt.rcParams['font.family'] = 'serif'
-plt.rcParams['font.serif'] = ['Times New Roman', 'DejaVu Serif']
+plt.rcParams['font.serif'] = ['Times New Roman']
 plt.rcParams['mathtext.fontset'] = 'stix'
 plt.rcParams['figure.dpi'] = 300
 plt.rcParams['savefig.dpi'] = 300
-plt.rcParams['lines.linewidth'] = 1.2
-plt.rcParams['lines.antialiased'] = True
+plt.rcParams['axes.grid'] = True
+plt.rcParams['grid.alpha'] = 0.15
+plt.rcParams['grid.linestyle'] = '--'
 
 
 def clean_data(arr):
-    """Remove NaN and Inf from array for contour plotting"""
+    """Remove NaN and Inf from array"""
     arr = np.array(arr)
     finite_mask = np.isfinite(arr)
     if np.any(finite_mask):
@@ -33,6 +55,19 @@ def clean_data(arr):
     else:
         arr = np.zeros_like(arr)
     return arr
+
+
+def get_valid_contour_levels(data, n_levels=3):
+    """Get valid increasing contour levels"""
+    valid_data = data[~np.isnan(data) & ~np.isinf(data)]
+    if len(valid_data) < n_levels:
+        return None
+    levels = np.percentile(valid_data, [25, 50, 75])
+    # Ensure strictly increasing
+    levels = np.unique(levels)
+    if len(levels) < 2:
+        return None
+    return levels
 
 
 def load_data():
@@ -90,48 +125,57 @@ def load_data():
 
 
 def fig1_lorenz_phi(data):
-    """Figure 1(a): Lorenz Phi field heatmap (no smoothing to preserve structure)"""
-    print("  Generating Fig1(a): Lorenz_Phi_magnitude.png")
+    """Figure 1: Lorenz Phi field heatmap"""
+    print("  Generating Fig1: Lorenz_Phi_magnitude.png")
     
     phi_grid = data['phi_lorenz']
     grid_x = data['grid_x']
     grid_z = data['grid_z']
     traj = data['traj']
     
-    # No smoothing - preserve original structure
     phi_grid = clean_data(phi_grid)
     log_phi = np.log10(phi_grid + 1e-10)
     log_phi = clean_data(log_phi)
     
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 8), facecolor='white')
     
-    levels = np.linspace(log_phi.min(), log_phi.max(), 50)
-    im = ax.contourf(grid_x, grid_z, log_phi, levels=levels, cmap='hot', alpha=0.9)
+    # Smooth contour with plasma colormap
+    levels = np.linspace(log_phi.min(), log_phi.max(), 40)
+    im = ax.contourf(grid_x, grid_z, log_phi, levels=levels, 
+                     cmap=CMAP_PHI_LOG, alpha=0.95)
     
-    # Long trajectory
-    ax.plot(traj[:, 0], traj[:, 2], color='cyan', linewidth=0.8, alpha=0.5)
-    ax.scatter(traj[0, 0], traj[0, 2], c='lime', s=100, marker='o',
-               edgecolors='white', linewidth=2, zorder=10, label='Start')
+    # Add contour lines for structure (skip if invalid)
+    contour_levels = get_valid_contour_levels(log_phi, n_levels=3)
+    if contour_levels is not None:
+        ax.contour(grid_x, grid_z, log_phi, levels=contour_levels,
+                   colors='white', linewidths=0.8, alpha=0.4, linestyles='--')
+    
+    # Trajectory
+    ax.plot(traj[:, 0], traj[:, 2], color=COLOR_TRAJ, linewidth=1.0, alpha=0.7)
+    ax.scatter(traj[0, 0], traj[0, 2], c=COLOR_START, s=100, marker='o',
+               edgecolors='black', linewidth=1.5, zorder=10, label='Start')
     
     cbar = plt.colorbar(im, ax=ax, shrink=0.85)
     cbar.set_label(r'$\log_{10}\Phi$', fontsize=13)
+    cbar.ax.tick_params(labelsize=11)
     
     ax.set_xlabel('x', fontsize=14)
     ax.set_ylabel('z', fontsize=14)
-    ax.set_title(r'$\Phi = \|\vec{\phi}\|$ Field on Lorenz Attractor', fontsize=14)
+    ax.set_title(r'Chaos Intensity $\Phi = \|\vec{\phi}\|$ on Lorenz Attractor', 
+                 fontsize=14, pad=10)
     ax.set_xlim(grid_x.min(), grid_x.max())
     ax.set_ylim(grid_z.min(), grid_z.max())
-    ax.legend(loc='upper right', fontsize=11)
-    ax.grid(True, alpha=0.15, linestyle='--')
+    ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
     
     plt.tight_layout()
-    plt.savefig('Lorenz_Phi_magnitude.png', dpi=300, bbox_inches='tight')
+    plt.savefig('Lorenz_Phi_magnitude.png', dpi=300, bbox_inches='tight',
+                facecolor='white', edgecolor='none')
     plt.close()
 
 
-def fig1b_lorenz_comparison(data):
-    """Figure 1(b): FTLE vs Phi comparison"""
-    print("  Generating Fig1(b): Lorenz_comparison.png")
+def fig2_lorenz_comparison(data):
+    """Figure 2: FTLE vs Phi comparison"""
+    print("  Generating Fig2: Lorenz_comparison.png")
     
     phi_grid = data['phi_lorenz']
     ftle_grid = data['ftle_lorenz']
@@ -145,39 +189,40 @@ def fig1b_lorenz_comparison(data):
     log_phi = np.log10(phi_grid + 1e-10)
     log_phi = clean_data(log_phi)
     
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6), facecolor='white')
     
-    # FTLE
+    # FTLE panel
     ax1 = axes[0]
-    levels_ftle = np.linspace(ftle_grid.min(), ftle_grid.max(), 50)
-    im1 = ax1.contourf(grid_x, grid_z, ftle_grid, levels=levels_ftle, cmap='viridis')
-    ax1.plot(traj[:, 0], traj[:, 2], 'w-', linewidth=0.5, alpha=0.3)
+    levels_ftle = np.linspace(ftle_grid.min(), ftle_grid.max(), 40)
+    im1 = ax1.contourf(grid_x, grid_z, ftle_grid, levels=levels_ftle, 
+                       cmap=CMAP_FTLE, alpha=0.95)
+    ax1.plot(traj[:, 0], traj[:, 2], 'w-', linewidth=0.6, alpha=0.4)
     ax1.set_xlabel('x', fontsize=12)
     ax1.set_ylabel('z', fontsize=12)
     ax1.set_title(r'(a) FTLE Field ($\tau=3.0$)', fontsize=12)
     cbar1 = plt.colorbar(im1, ax=ax1, shrink=0.85)
     cbar1.set_label(r'FTLE $\lambda$', fontsize=11)
-    ax1.grid(True, alpha=0.15, linestyle='--')
     
-    # Phi
+    # Phi panel
     ax2 = axes[1]
-    im2 = ax2.contourf(grid_x, grid_z, log_phi, levels=50, cmap='hot')
-    ax2.plot(traj[:, 0], traj[:, 2], 'c-', linewidth=0.5, alpha=0.3)
+    im2 = ax2.contourf(grid_x, grid_z, log_phi, levels=40, 
+                       cmap=CMAP_PHI_LOG, alpha=0.95)
+    ax2.plot(traj[:, 0], traj[:, 2], 'c-', linewidth=0.6, alpha=0.4)
     ax2.set_xlabel('x', fontsize=12)
     ax2.set_ylabel('z', fontsize=12)
     ax2.set_title(r'(b) $\Phi = \|\vec{\phi}\|$ Field', fontsize=12)
     cbar2 = plt.colorbar(im2, ax=ax2, shrink=0.85)
     cbar2.set_label(r'$\log_{10}\Phi$', fontsize=11)
-    ax2.grid(True, alpha=0.15, linestyle='--')
     
     plt.tight_layout()
-    plt.savefig('Lorenz_comparison.png', dpi=300, bbox_inches='tight')
+    plt.savefig('Lorenz_comparison.png', dpi=300, bbox_inches='tight',
+                facecolor='white', edgecolor='none')
     plt.close()
 
 
-def fig2_lorenz_flow(data):
-    """Figure 2: Lorenz phase flow overlay"""
-    print("  Generating Fig2: Lorenz_phi_with_flow.png")
+def fig3_lorenz_flow(data):
+    """Figure 3: Lorenz phase flow overlay"""
+    print("  Generating Fig3: Lorenz_phi_with_flow.png")
     
     phi_grid = data['phi_lorenz']
     grid_x = data['grid_x']
@@ -188,10 +233,12 @@ def fig2_lorenz_flow(data):
     log_phi = np.log10(phi_grid + 1e-10)
     log_phi = clean_data(log_phi)
     
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig, ax = plt.subplots(figsize=(12, 10), facecolor='white')
     
-    levels = np.linspace(log_phi.min(), log_phi.max(), 50)
-    im = ax.contourf(grid_x, grid_z, log_phi, levels=levels, cmap='hot', alpha=0.85)
+    # Background
+    levels = np.linspace(log_phi.min(), log_phi.max(), 40)
+    im = ax.contourf(grid_x, grid_z, log_phi, levels=levels, 
+                     cmap=CMAP_PHI_LOG, alpha=0.85)
     
     # Vector field
     step = 6
@@ -208,13 +255,13 @@ def fig2_lorenz_flow(data):
         u = u / speed_max
         w = w / speed_max
     
-    ax.quiver(X_q, Z_q, u, w, color='black', alpha=0.6, scale=18, 
-              width=0.008, headwidth=4, headlength=5, 
-              edgecolors='white', linewidth=0.5)
+    ax.quiver(X_q, Z_q, u, w, color=COLOR_ARROW, alpha=0.65, scale=20,
+              width=0.008, headwidth=4, headlength=5,
+              edgecolors=COLOR_ARROW_EDGE, linewidth=0.5)
     
-    # Long trajectory
-    ax.plot(traj[:, 0], traj[:, 2], color='cyan', linewidth=1.0, alpha=0.7)
-    ax.scatter(traj[0, 0], traj[0, 2], c='lime', s=120, marker='o',
+    # Trajectory
+    ax.plot(traj[:, 0], traj[:, 2], color=COLOR_TRAJ, linewidth=1.2, alpha=0.8)
+    ax.scatter(traj[0, 0], traj[0, 2], c=COLOR_START, s=120, marker='o',
                edgecolors='black', linewidth=1.5, zorder=10, label='Start')
     
     cbar = plt.colorbar(im, ax=ax, shrink=0.85)
@@ -223,17 +270,17 @@ def fig2_lorenz_flow(data):
     ax.set_xlabel('x', fontsize=14)
     ax.set_ylabel('z', fontsize=14)
     ax.set_title(r'Phase Flow on Chaos Intensity Field (Lorenz)', fontsize=14)
-    ax.legend(loc='upper right', fontsize=11)
-    ax.grid(True, alpha=0.15, linestyle='--')
+    ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
     
     plt.tight_layout()
-    plt.savefig('Lorenz_phi_with_flow.png', dpi=300, bbox_inches='tight')
+    plt.savefig('Lorenz_phi_with_flow.png', dpi=300, bbox_inches='tight',
+                facecolor='white', edgecolor='none')
     plt.close()
 
 
-def fig3_duffing_phi(data):
-    """Figure 3: Duffing Phi field with long trajectory"""
-    print("  Generating Fig3: Duffing_chaotic_phi.png")
+def fig4_duffing_phi(data):
+    """Figure 4: Duffing Phi field"""
+    print("  Generating Fig4: Duffing_chaotic_phi.png")
     
     phi_grid = data['phi_duffing']
     grid_x = data['grid_x_d']
@@ -245,55 +292,49 @@ def fig3_duffing_phi(data):
     log_phi = np.log10(phi_grid + 1e-10)
     log_phi = clean_data(log_phi)
     
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 8), facecolor='white')
     
-    levels = np.linspace(log_phi.min(), log_phi.max(), 50)
-    im = ax.contourf(grid_x, grid_v, log_phi, levels=levels, cmap='hot', alpha=0.9)
+    levels = np.linspace(log_phi.min(), log_phi.max(), 40)
+    im = ax.contourf(grid_x, grid_v, log_phi, levels=levels, 
+                     cmap=CMAP_PHI_LOG, alpha=0.95)
     
-    # Generate LONG chaotic trajectory for Duffing (500 seconds)
-    def chaotic_duffing(state, t, delta=0.15, gamma=0.3, omega=1):
-        x, v = state
-        return [v, x - x**3 - delta * v + gamma * np.cos(omega * t)]
-    
-    t_chaos = np.arange(0, 500, 0.02)  # 500 seconds, high resolution
-    traj_chaos = odeint(chaotic_duffing, [0.5, 0.5], t_chaos)
-    
-    # Plot trajectory (subsampled for performance but still long)
-    subsample = 5
-    ax.plot(traj_chaos[::subsample, 0], traj_chaos[::subsample, 1], 
-            color='cyan', linewidth=0.6, alpha=0.4)
-    ax.scatter(traj_chaos[0, 0], traj_chaos[0, 1], c='lime', s=80, marker='o',
-               edgecolors='black', linewidth=1.5, zorder=10, label='Start')
+    # Add contour lines (skip if invalid)
+    contour_levels = get_valid_contour_levels(log_phi, n_levels=3)
+    if contour_levels is not None:
+        ax.contour(grid_x, grid_v, log_phi, levels=contour_levels,
+                   colors='white', linewidths=0.6, alpha=0.4, linestyles='--')
     
     # Poincaré section
-    ax.scatter(x_poinc[::20], v_poinc[::20], c='cyan', s=1.5, alpha=0.15, rasterized=True)
+    ax.scatter(x_poinc[::20], v_poinc[::20], c='cyan', s=2, alpha=0.25, rasterized=True)
     
     # Fixed points
-    ax.scatter(0, 0, c='red', s=120, marker='X', edgecolors='white', 
+    ax.scatter(0, 0, c=COLOR_SADDLE, s=120, marker='X', edgecolors='white', 
                linewidth=2.5, zorder=10, label='Saddle')
-    ax.scatter(1, 0, c='lime', s=100, marker='o', edgecolors='white', 
+    ax.scatter(1, 0, c=COLOR_CENTER, s=100, marker='o', edgecolors='white', 
                linewidth=2, zorder=10, label='Stable centers')
-    ax.scatter(-1, 0, c='lime', s=100, marker='o', edgecolors='white', linewidth=2, zorder=10)
+    ax.scatter(-1, 0, c=COLOR_CENTER, s=100, marker='o', edgecolors='white', 
+               linewidth=2, zorder=10)
     
     cbar = plt.colorbar(im, ax=ax, shrink=0.85)
     cbar.set_label(r'$\log_{10}\Phi$', fontsize=13)
     
     ax.set_xlabel('x', fontsize=14)
     ax.set_ylabel('v', fontsize=14)
-    ax.set_title(r'Chaos Intensity $\Phi = \|\vec{\phi}\|$ on Duffing Attractor', fontsize=14)
-    ax.legend(loc='upper right', fontsize=10)
-    ax.grid(True, alpha=0.15, linestyle='--')
+    ax.set_title(r'Chaos Intensity $\Phi = \|\vec{\phi}\|$ on Duffing Attractor', 
+                 fontsize=14)
+    ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
     ax.set_xlim(-1.8, 1.8)
     ax.set_ylim(-1.8, 1.8)
     
     plt.tight_layout()
-    plt.savefig('Duffing_chaotic_phi.png', dpi=300, bbox_inches='tight')
+    plt.savefig('Duffing_chaotic_phi.png', dpi=300, bbox_inches='tight',
+                facecolor='white', edgecolor='none')
     plt.close()
 
 
-def fig4_duffing_flow(data):
-    """Figure 4: Duffing phase flow overlay with long trajectory"""
-    print("  Generating Fig4: Duffing_phi_with_flow.png")
+def fig5_duffing_flow(data):
+    """Figure 5: Duffing phase flow overlay"""
+    print("  Generating Fig5: Duffing_phi_with_flow.png")
     
     phi_grid = data['phi_duffing']
     grid_x = data['grid_x_d']
@@ -303,10 +344,11 @@ def fig4_duffing_flow(data):
     log_phi = np.log10(phi_grid + 1e-10)
     log_phi = clean_data(log_phi)
     
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig, ax = plt.subplots(figsize=(12, 10), facecolor='white')
     
-    levels = np.linspace(log_phi.min(), log_phi.max(), 50)
-    im = ax.contourf(grid_x, grid_v, log_phi, levels=levels, cmap='hot', alpha=0.85)
+    levels = np.linspace(log_phi.min(), log_phi.max(), 40)
+    im = ax.contourf(grid_x, grid_v, log_phi, levels=levels, 
+                     cmap=CMAP_PHI_LOG, alpha=0.85)
     
     # Vector field
     step = 6
@@ -323,31 +365,31 @@ def fig4_duffing_flow(data):
         u = u / speed_max
         w = w / speed_max
     
-    ax.quiver(X_q, V_q, u, w, color='black', alpha=0.6, scale=18,
+    ax.quiver(X_q, V_q, u, w, color=COLOR_ARROW, alpha=0.65, scale=20,
               width=0.008, headwidth=4, headlength=5,
-              edgecolors='white', linewidth=0.5)
+              edgecolors=COLOR_ARROW_EDGE, linewidth=0.5)
     
-    # Generate LONG chaotic trajectory
+    # Generate chaotic trajectory
     def chaotic_duffing(state, t, delta=0.15, gamma=0.3, omega=1):
         x, v = state
         return [v, x - x**3 - delta * v + gamma * np.cos(omega * t)]
     
     t_chaos = np.arange(0, 500, 0.02)
-    traj_chaos = odeint(chaotic_duffing, [0.5, 0.5], t_chaos)
+    traj_chaos = odeint(chaotic_duffing, [0, -0.1], t_chaos)
     
     # Plot trajectory
     subsample = 5
     ax.plot(traj_chaos[::subsample, 0], traj_chaos[::subsample, 1], 
-            color='cyan', linewidth=0.7, alpha=0.5)
-    ax.scatter(traj_chaos[0, 0], traj_chaos[0, 1], c='lime', s=100, marker='o',
+            color=COLOR_TRAJ, linewidth=0.8, alpha=0.5)
+    ax.scatter(traj_chaos[0, 0], traj_chaos[0, 1], c=COLOR_START, s=100, marker='o',
                edgecolors='black', linewidth=1.5, zorder=10, label='Start')
     
     # Fixed points
-    ax.scatter(0, 0, c='red', s=120, marker='X', edgecolors='white', 
+    ax.scatter(0, 0, c=COLOR_SADDLE, s=120, marker='X', edgecolors='white', 
                linewidth=2.5, zorder=10, label='Saddle')
-    ax.scatter(1, 0, c='lime', s=100, marker='o', edgecolors='white', 
+    ax.scatter(1, 0, c=COLOR_CENTER, s=100, marker='o', edgecolors='white', 
                linewidth=2, zorder=10, label='Stable centers')
-    ax.scatter(-1, 0, c='lime', s=100, marker='o', edgecolors='white', linewidth=2, zorder=10)
+    ax.scatter(-1, 0, c=COLOR_CENTER, s=100, marker='o', edgecolors='white', linewidth=2, zorder=10)
     
     cbar = plt.colorbar(im, ax=ax, shrink=0.85)
     cbar.set_label(r'$\log_{10}\Phi$', fontsize=13)
@@ -355,24 +397,24 @@ def fig4_duffing_flow(data):
     ax.set_xlabel('x', fontsize=14)
     ax.set_ylabel('v', fontsize=14)
     ax.set_title(r'Phase Flow on Chaos Intensity Field (Duffing)', fontsize=14)
-    ax.legend(loc='upper right', fontsize=10)
-    ax.grid(True, alpha=0.15, linestyle='--')
+    ax.legend(loc='upper right', fontsize=11, framealpha=0.9)
     ax.set_xlim(-1.8, 1.8)
     ax.set_ylim(-1.8, 1.8)
     
     plt.tight_layout()
-    plt.savefig('Duffing_phi_with_flow.png', dpi=300, bbox_inches='tight')
+    plt.savefig('Duffing_phi_with_flow.png', dpi=300, bbox_inches='tight',
+                facecolor='white', edgecolor='none')
     plt.close()
 
 
-def fig5_duffing_ordered(data):
-    """Figure 5: Ordered Duffing verification"""
-    print("  Generating Fig5: Duffing_ordered.png")
+def fig6_duffing_ordered(data):
+    """Figure 6: Ordered Duffing verification"""
+    print("  Generating Fig6: Duffing_ordered.png")
     
     ordered_dist = data['ordered_dist']
     t_eval = data['t_eval']
     
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5), facecolor='white')
     
     # Phase portrait
     ax1 = axes[0]
@@ -380,37 +422,38 @@ def fig5_duffing_ordered(data):
         x, v = state
         return [v, x - x**3 - delta * v + gamma * np.cos(omega * t)]
     
-    t_plot = np.arange(0, 100, 0.01)  # Longer trajectory
+    t_plot = np.arange(0, 100, 0.01)
     traj_ordered = odeint(ordered_duffing, [0.5, 0], t_plot)
-    ax1.plot(traj_ordered[:, 0], traj_ordered[:, 1], 'b-', linewidth=1.0)
-    ax1.scatter(traj_ordered[0, 0], traj_ordered[0, 1], c='red', s=60, marker='o',
+    ax1.plot(traj_ordered[:, 0], traj_ordered[:, 1], 'b-', linewidth=1.2, alpha=0.8)
+    ax1.scatter(traj_ordered[0, 0], traj_ordered[0, 1], c=COLOR_START, s=60, marker='o',
                edgecolors='black', zorder=10, label='Start')
     ax1.set_xlabel('x', fontsize=12)
     ax1.set_ylabel('v', fontsize=12)
-    ax1.set_title('(a) Phase Portrait (δ=0.3, γ=0)', fontsize=12)
+    ax1.set_title('(a) Phase Portrait ($\delta=0.3$, $\gamma=0$)', fontsize=12)
     ax1.legend(loc='upper right', fontsize=10)
     ax1.grid(True, alpha=0.3)
     ax1.set_aspect('equal')
     
     # Error evolution
     ax2 = axes[1]
-    ax2.semilogy(t_eval, ordered_dist, 'r-', linewidth=1.5)
+    ax2.semilogy(t_eval, ordered_dist, 'r-', linewidth=1.5, alpha=0.8)
     ax2.axhline(y=0.5, color='g', linestyle='--', linewidth=1.5, 
                 label=r'Tolerance $\Delta=0.5$')
-    ax2.set_xlabel('Time t', fontsize=12)
+    ax2.set_xlabel('Time $t$', fontsize=12)
     ax2.set_ylabel(r'Distance $\|R(t) - q_{\text{true}}\|$', fontsize=12)
     ax2.set_title('(b) Error Contraction', fontsize=12)
     ax2.legend(loc='upper right', fontsize=11)
     ax2.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('Duffing_ordered.png', dpi=300, bbox_inches='tight')
+    plt.savefig('Duffing_ordered.png', dpi=300, bbox_inches='tight',
+                facecolor='white', edgecolor='none')
     plt.close()
 
 
 def main():
     print("=" * 60)
-    print("Generating Publication Figures for Paper")
+    print("Generating Publication Figures with Professional Colors")
     print("=" * 60)
     
     data = load_data()
@@ -419,28 +462,28 @@ def main():
     
     if 'phi_lorenz' in data:
         fig1_lorenz_phi(data)
-        fig1b_lorenz_comparison(data)
-        fig2_lorenz_flow(data)
+        fig2_lorenz_comparison(data)
+        fig3_lorenz_flow(data)
     
     if 'phi_duffing' in data:
-        fig3_duffing_phi(data)
-        fig4_duffing_flow(data)
+        fig4_duffing_phi(data)
+        fig5_duffing_flow(data)
     
     if 'ordered_dist' in data:
-        fig5_duffing_ordered(data)
+        fig6_duffing_ordered(data)
     
     print("\n" + "=" * 60)
     print("All figures generated!")
     print("=" * 60)
     print("""
-    Output files:
-    
-    Lorenz_Phi_magnitude.png    - Fig. 1(a)
-    Lorenz_comparison.png       - Fig. 1(b)
-    Lorenz_phi_with_flow.png    - Fig. 2
-    Duffing_chaotic_phi.png     - Fig. 3
-    Duffing_phi_with_flow.png   - Fig. 4
-    Duffing_ordered.png         - Fig. 5
+    Color schemes used:
+    - Chaos intensity: Inferno (dark red-bright yellow)
+    - FTLE: Viridis (green-blue, perceptually uniform)
+    - Trajectories: Turquoise (#00CED1)
+    - Start point: Gold (#FFD700)
+    - Saddle point: Crimson (#DC143C)
+    - Stable centers: Lime green (#32CD32)
+    - Flow arrows: White with dark edges
     """)
 
 
